@@ -1,0 +1,201 @@
+import random
+import heapq
+import numpy as np
+import matplotlib.pyplot as plt
+
+class Node:
+    def __init__(self, x, y, g, h):
+        self.x = x
+        self.y = y
+        self.g = g  # Cost from the start to this node
+        self.h = h  # Heuristic (estimated cost to goal)
+        self.f = g + h  # Total cost (f = g + h)
+        self.parent = None  # To reconstruct the path later
+
+    def __lt__(self, other):
+        if self.f == other.f:
+            return self.g > other.g  # Tie-breaking based on larger g-values
+        return self.f < other.f
+
+def manhattan_heuristic(node, goal):
+    # Change node from Node object to tuple coordinates
+    return abs(node[0] - goal[0]) + abs(node[1] - goal[1])
+
+# Update pathfinding functions to use tuple coordinates
+def a_star_search(start, goal, grid):
+    open_list = []
+    closed_list = set()
+    start_node = Node(start[0], start[1], 0, manhattan_heuristic(start, goal))
+    heapq.heappush(open_list, start_node)
+
+    while open_list:
+        current_node = heapq.heappop(open_list)
+
+        if (current_node.x, current_node.y) == goal:
+            return reconstruct_path(current_node)  # Path found
+
+        closed_list.add((current_node.x, current_node.y))
+
+        for neighbor_x, neighbor_y in get_neighbors(current_node, grid):
+            if (neighbor_x, neighbor_y) in closed_list:
+                continue
+
+            neighbor_node = Node(neighbor_x, neighbor_y, current_node.g + 1, 
+                                 manhattan_heuristic((neighbor_x, neighbor_y), goal))  # Pass as tuple
+            neighbor_node.parent = current_node
+            heapq.heappush(open_list, neighbor_node)
+
+    print("No path found")
+    return None
+
+# Similarly update the other pathfinding functions
+def adaptive_a_star(start, goal, grid):
+    open_list = []
+    closed_list = set()
+    start_node = Node(start[0], start[1], 0, manhattan_heuristic(start, goal))
+    heapq.heappush(open_list, start_node)
+
+    while open_list:
+        current_node = heapq.heappop(open_list)
+
+        if (current_node.x, current_node.y) == goal:
+            for node in closed_list:
+                node.h = manhattan_heuristic((node.x, node.y), goal)  # Update heuristic
+            return reconstruct_path(current_node)  # Path found
+
+        closed_list.add(current_node)
+
+        for neighbor_x, neighbor_y in get_neighbors(current_node, grid):
+            if (neighbor_x, neighbor_y) in closed_list:
+                continue
+
+            neighbor_node = Node(neighbor_x, neighbor_y, current_node.g + 1, 
+                                 manhattan_heuristic((neighbor_x, neighbor_y), goal))  # Pass as tuple
+            neighbor_node.parent = current_node
+            heapq.heappush(open_list, neighbor_node)
+
+    print("No path found")
+    return None
+
+def repeated_forward_a_star(start, goal, grid):
+    open_list = []
+    closed_list = set()
+    start_node = Node(start[0], start[1], 0, manhattan_heuristic(start, goal))
+    heapq.heappush(open_list, start_node)
+
+    while open_list:
+        current_node = heapq.heappop(open_list)
+
+        if (current_node.x, current_node.y) == goal:
+            return reconstruct_path(current_node)  # Path found
+
+        closed_list.add((current_node.x, current_node.y))
+
+        for neighbor_x, neighbor_y in get_neighbors(current_node, grid):
+            if (neighbor_x, neighbor_y) in closed_list:
+                continue
+
+            neighbor_node = Node(neighbor_x, neighbor_y, current_node.g + 1, 
+                                 manhattan_heuristic((neighbor_x, neighbor_y), goal))  # Pass as tuple
+            neighbor_node.parent = current_node
+            heapq.heappush(open_list, neighbor_node)
+
+    print("No path found")
+    return None
+
+def repeated_backward_a_star(start, goal, grid):
+    path = a_star_search(start, goal, grid)
+    if path:
+        path.reverse()  # Reverse the path found
+    return path
+
+
+def generate_maze(width, height):
+    grid = [['1' for _ in range(width)] for _ in range(height)]  # '1' represents walls
+
+    stack = []
+    start_x, start_y = random.choice(range(1, width, 2)), random.choice(range(1, height, 2))
+    grid[start_y][start_x] = '0'
+    stack.append((start_x, start_y))
+
+    while stack:
+        x, y = stack.pop()
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        random.shuffle(directions)  # Randomize directions for maze generation
+
+        for dx, dy in directions:
+            nx, ny = x + 2 * dx, y + 2 * dy
+            if 0 <= nx < width and 0 <= ny < height and grid[ny][nx] == '1':
+                grid[ny][nx] = '0'  # Carve out a path
+                grid[y + dy][x + dx] = '0'  # Carve the intermediate cell
+                stack.append((nx, ny))  # Add new cell to stack for further carving
+
+    # Add entry and exit points
+    grid[0][1] = '0'  # Entry point at top
+    grid[height - 1][width - 2] = '0'  # Exit point at bottom
+
+    return grid
+
+def visualize_grid(grid, filename):
+    plt.figure(figsize=(10, 10))
+    plt.imshow(grid, cmap='binary', interpolation='nearest')
+    plt.axis('off')  # Hide axis for cleaner visualization
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()  # Close figure
+
+# Generate and visualize 50 mazes
+for i in range(50):
+    maze = generate_maze(101, 101)
+
+    # Store the maze in a text file
+    with open(f'maze_{i}.txt', 'w') as f:
+        for row in maze:
+            f.write(''.join(row) + '\n')
+
+    # Visualize and save the maze as an image
+    maze_np = np.array(maze)
+    visualize_grid(maze_np == '0', f'maze_visual_{i}.png')  # Visualize open cells ('0') only
+
+# Example of using the search algorithms
+start = (0, 1)  # Starting point (entry)
+goal = (100, 99)  # Goal point (exit)
+
+# Perform A* search
+path_a_star = a_star_search(start, goal, maze)
+print("A* Path:", path_a_star)
+
+# Perform Adaptive A* search
+path_adaptive_a_star = adaptive_a_star(start, goal, maze)
+print("Adaptive A* Path:", path_adaptive_a_star)
+
+# Perform Repeated Forward A* search
+path_repeated_forward = repeated_forward_a_star(start, goal, maze)
+print("Repeated Forward A* Path:", path_repeated_forward)
+
+# Perform Repeated Backward A* search
+path_repeated_backward = repeated_backward_a_star(start, goal, maze)
+print("Repeated Backward A* Path:", path_repeated_backward)
+
+# Visualize the paths on the maze
+def visualize_path_on_maze(path, maze, filename):
+    maze_with_path = np.array(maze)
+    for x, y in path:
+        maze_with_path[y][x] = 'P'  # Mark the path with 'P'
+    
+    plt.figure(figsize=(10, 10))
+    plt.imshow(maze_with_path, cmap='binary', interpolation='nearest')
+    plt.axis('off')
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+# Visualize the paths
+if path_a_star:
+    visualize_path_on_maze(path_a_star, maze, 'a_star_path.png')
+if path_adaptive_a_star:
+    visualize_path_on_maze(path_adaptive_a_star, maze, 'adaptive_a_star_path.png')
+if path_repeated_forward:
+    visualize_path_on_maze(path_repeated_forward, maze, 'repeated_forward_a_star_path.png')
+if path_repeated_backward:
+    visualize_path_on_maze(path_repeated_backward, maze, 'repeated_backward_a_star_path.png')
+
+print("Visualization complete.")
