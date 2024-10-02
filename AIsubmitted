@@ -1,0 +1,187 @@
+import random
+import heapq
+import numpy as np
+import matplotlib.pyplot as plt
+
+class Cl: 
+    def __init__(self, px, py, g, h):
+        self.px = px
+        self.py = py
+        self.g = g  
+        self.h = h  
+        self.f = g + h  
+        self.parent = None 
+
+    def __lt__(self, other):
+        if self.f == other.f:
+            return self.g > other.g
+        return self.f < other.f
+
+def h_manhattan(cn, goal): 
+    return abs(cn[0] - goal[0]) + abs(cn[1] - goal[1])
+
+def find_nbrs(cn, grid): 
+    nbrs = []
+    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)] 
+
+    for dx, dy in dirs:
+        nx, ny = cn.px + dx, cn.py + dy
+        if 0 <= nx < len(grid[0]) and 0 <= ny < len(grid) and grid[ny][nx] == '0':
+            nbrs.append((nx, ny))
+
+    return nbrs
+
+def trace_path(end):  
+    path = []
+    while end is not None:
+        path.append((end.px, end.py))
+        end = end.parent
+    return path[::-1]
+
+def a_star(init, goal, grid):  
+    open_set = []
+    closed_set = set()
+    start = Cl(init[0], init[1], 0, h_manhattan(init, goal))
+    heapq.heappush(open_set, start)
+
+    while open_set:
+        curr = heapq.heappop(open_set) 
+
+        if (curr.px, curr.py) == goal:
+            return trace_path(curr)
+
+        closed_set.add((curr.px, curr.py))
+
+        for nx, ny in find_nbrs(curr, grid):
+            if (nx, ny) in closed_set:
+                continue
+
+            nbr = Cl(nx, ny, curr.g + 1, h_manhattan((nx, ny), goal))
+            nbr.parent = curr
+            heapq.heappush(open_set, nbr)
+
+    print("No path")
+    return None
+
+def adaptive_a_star(init, goal, grid):  
+    open_set = []
+    closed_set = set()
+    start = Cl(init[0], init[1], 0, h_manhattan(init, goal))
+    heapq.heappush(open_set, start)
+
+    while open_set:
+        curr = heapq.heappop(open_set)
+
+        if (curr.px, curr.py) == goal:
+            for cl_node in closed_set:
+                cl_node.h = h_manhattan((cl_node.px, cl_node.py), goal)
+            return trace_path(curr)
+
+        closed_set.add(curr)
+
+        for nx, ny in find_nbrs(curr, grid):
+            if (nx, ny) in closed_set:
+                continue
+
+            nbr = Cl(nx, ny, curr.g + 1, h_manhattan((nx, ny), goal))
+            nbr.parent = curr
+            heapq.heappush(open_set, nbr)
+
+    print("No path found")
+    return None
+
+def rep_fwd_a_star(init, goal, grid):  
+    route = a_star(init, goal, grid)
+    if route is None:
+        return None
+    
+    for x, y in route:
+        if grid[y][x] == '1':  # Blocked
+            print("Blocked cell")
+            return a_star(init, goal, grid)
+
+    return route
+
+def rep_bwd_a_star(init, goal, grid):  
+    rev_route = a_star(goal, init, grid)
+    if rev_route:
+        rev_route.reverse()
+    return rev_route
+
+def create_mz(w, h):  
+    mz = [['1' for _ in range(w)] for _ in range(h)]
+
+    stack = []
+    sx, sy = random.choice(range(1, w, 2)), random.choice(range(1, h, 2))
+    mz[sy][sx] = '0'
+    stack.append((sx, sy))
+
+    while stack:
+        cx, cy = stack.pop()
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        random.shuffle(dirs)
+
+        for dx, dy in dirs:
+            nx, ny = cx + 2 * dx, cy + 2 * dy
+            if 0 <= nx < w and 0 <= ny < h and mz[ny][nx] == '1':
+                mz[ny][nx] = '0'
+                mz[cy + dy][cx + dx] = '0'
+                stack.append((nx, ny))
+
+    mz[0][1] = '0'
+    mz[h - 1][w - 2] = '0'
+
+    return mz
+
+def plot_grid(mz, filename): 
+    plt.figure(figsize=(10, 10))
+    plt.imshow(mz, cmap='binary', interpolation='nearest')
+    plt.axis('off')
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+for i in range(50):
+    rnd_mz = create_mz(101, 101)
+
+    with open(f'maze_{i}.txt', 'w') as f:
+        for row in rnd_mz:
+            f.write(''.join(row) + '\n')
+
+    np_mz = np.array(rnd_mz)
+    plot_grid(np_mz == '0', f'maze_visual_{i}.png')
+
+start = (0, 1)
+end = (100, 99)
+
+a_star_route = a_star(start, end, rnd_mz)
+print("A* Path:", a_star_route)
+adaptive_a_star_route = adaptive_a_star(start, end, rnd_mz)
+print("Adaptive A* Path:", adaptive_a_star_route)
+
+rep_fwd_route = rep_fwd_a_star(start, end, rnd_mz)
+print("Repeated Forward A* Path:", rep_fwd_route)
+
+rep_bwd_route = rep_bwd_a_star(start, end, rnd_mz)
+print("Repeated Backward A* Path:", rep_bwd_route)
+
+def plot_path(path, mz, filename):  
+    mz_cp = np.array(mz)
+    for x, y in path:
+        mz_cp[y][x] = 'P'
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(mz_cp, cmap='binary', interpolation='nearest')
+    plt.axis('off')
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+if a_star_route:
+    plot_path(a_star_route, rnd_mz, 'a_star_path.png')
+if adaptive_a_star_route:
+    plot_path(adaptive_a_star_route, rnd_mz, 'adaptive_a_star_path.png')
+if rep_fwd_route:
+    plot_path(rep_fwd_route, rnd_mz, 'rep_fwd_a_star_path.png')
+if rep_bwd_route:
+    plot_path(rep_bwd_route, rnd_mz, 'rep_bwd_a_star_path.png')
+
+print("Visualization complete.")
